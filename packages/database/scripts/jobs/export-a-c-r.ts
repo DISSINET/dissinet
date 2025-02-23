@@ -1,24 +1,23 @@
+import Entity from "@models/entity/entity";
+import Relation from "@models/relation/relation";
+import Resource from "@models/resource/resource";
+import Value from "@models/value/value";
+import { Db } from "@service/rethink";
+import { DbEnums, EntityEnums, RelationEnums } from "@shared/enums";
 import {
   IAction,
   IConcept,
   IReference,
   IResource,
   IValue,
+  Relation as RelationTypes,
 } from "@shared/types";
-import { Connection, r as rethink } from "rethinkdb-ts";
-import { IJob } from ".";
-import { DbEnums, EntityEnums, RelationEnums } from "@shared/enums";
-import Generator from "./Generator";
-import { Db } from "@service/rethink";
-import Relation from "@models/relation/relation";
-import { Relation as RelationTypes } from "@shared/types";
-import { question } from "scripts/import/prompts";
-import * as fs from "fs";
 import * as path from "path";
-import Entity from "@models/entity/entity";
-import Resource from "@models/resource/resource";
+import { Connection, r as rethink } from "rethinkdb-ts";
+import { question } from "scripts/import/prompts";
 import { v4 as uuidv4 } from "uuid";
-import Value from "@models/value/value";
+import { IJob } from ".";
+import Generator from "./Generator";
 
 export async function getEntitiesDataByClass<T>(
   db: Connection,
@@ -31,7 +30,7 @@ export async function getEntitiesDataByClass<T>(
     .run(connection);
 }
 
-async function findForEntities<T extends RelationTypes.IRelation>(
+async function getRelationsWithEntities<T extends RelationTypes.IRelation>(
   db: Connection,
   entityIds: string[],
   relType?: RelationEnums.Type,
@@ -82,20 +81,22 @@ class ACRGenerator extends Generator {
   }
 
   async getUserInfo() {
-    this.datasetName = await question<string>(
+    const datasetName = await question<string>(
       "Name of the dataset?",
-      (input: string): string => {
-        return input;
-      },
+      (input: string): string => input,
       ""
     );
-    if (!this.datasetName) {
+
+    console.log("Dataset name:", datasetName);
+    if (!datasetName) {
       throw new Error("Dataset name should not be empty");
     }
+    this.datasetName = datasetName;
+
     const datasetPath = this.getPath();
-    if (fs.existsSync(datasetPath)) {
-      throw new Error(`The dataset path (${datasetPath}) already exists`);
-    }
+    // if (fs.existsSync(datasetPath)) {
+    //   throw new Error(`The dataset path (${datasetPath}) already exists`);
+    // }
   }
 }
 
@@ -104,6 +105,7 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   await generator.getUserInfo();
 
   const values: IValue[] = [];
+  const existingReferenceValueIds: string[] = [];
 
   // retrieve all actions and push origin resource into list of references
   // +
@@ -111,10 +113,15 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   const actions = (
     await getEntitiesDataByClass<IAction>(db, EntityEnums.Class.Action)
   ).map((a) => {
+    a.references.forEach((r) => {
+      existingReferenceValueIds.push(r.value);
+    });
+
     const v = new Value({
       id: uuidv4(),
       labels: [a.id],
     });
+
     a.references.push({
       id: uuidv4(),
       resource: originResource.id,
@@ -129,31 +136,66 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   // replace original label with the id
   const concepts = (
     await getEntitiesDataByClass<IConcept>(db, EntityEnums.Class.Concept)
-  ).map((a) => {
+  ).map((c) => {
+    c.references.forEach((r) => {
+      existingReferenceValueIds.push(r.value);
+    });
+
+    // metaprops
+    c.props.forEach((p) => {
+      
+
     const v = new Value({
       id: uuidv4(),
-      labels: [a.id],
+      labels: [c.id],
     });
     values.push(v);
-    a.references.push({
+    c.references.push({
       id: uuidv4(),
       resource: originResource.id,
       value: v.id,
     } as IReference);
-    return a;
+    return c;
   });
-  const resources = await getEntitiesDataByClass<IResource>(
-    db,
-    EntityEnums.Class.Resource
-  );
 
+  // retrieve all resources
+  const resources = (
+    await getEntitiesDataByClass<IResource>(db, EntityEnums.Class.Resource)
+  ).map((r) => {
+    r.references.forEach((r) => {
+      existingReferenceValueIds.push(r.value);
+    });
+
+    const v = new Value({
+      id: uuidv4(),
+      labels: [r.id],
+    });
+
+    values.push(v);
+    r.references.push({
+      id: uuidv4(),
+      resource: originResource.id,
+      value: v.id,
+    } as IReference);
+    return r;
+  });
+
+  // get all Reference Values from existingReferenceValueIds and merge into values
+  const existingReferenceValues = await rethink
+    .table(Value.table)
+    .getAll(...existingReferenceValueIds)
+    .run(db);
+
+  values.push(...existingReferenceValues);
+
+  // allow only relations, which have all entities in lists above
   const allIds = actions
     .map((a) => a.id)
     .concat(concepts.map((c) => c.id))
     .concat(resources.map((r) => r.id));
 
-  // allow only relations, which have all entities in lists above
-  const rels = (await findForEntities(db, allIds)).filter((r) => {
+  const relations = (await getRelationsWithEntities(db, allIds)).filter((r) => {
+    // check if all relation entityIds are in allIds
     let matches = 0;
     for (const entityId of r.entityIds) {
       for (const allid of allIds) {
@@ -175,7 +217,14 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   generator.entities.entities.C = concepts;
   generator.entities.entities.V = values;
   generator.entities.entities.R = [originResource, ...resources];
-  generator.relations.relations.A1S = rels;
+
+  generator.relations.relations = Object.values(RelationEnums.Type).reduce(
+    (acc, type) => {
+      acc[type] = relations.filter((r) => r.type === type);
+      return acc;
+    },
+    {} as Record<RelationEnums.Type, RelationTypes.IRelation[]>
+  );
 
   generator.output();
 };
