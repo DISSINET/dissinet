@@ -20,21 +20,18 @@ import {
 type CellType = CellProps<IResponseUsedInDocument>;
 interface EntityDetailUsedInDocumentsTable {
   title: { singular: string; plural: string };
-  entities: { [key: string]: IEntity };
-  uses: IResponseUsedInDocument[];
   perPage?: number;
-  entity: IEntity;
+  entity: IResponseDetail;
 }
 export const EntityDetailUsedInDocumentsTable: React.FC<
   EntityDetailUsedInDocumentsTable
-> = ({ title, entities, uses = [], perPage, entity }) => {
-  const data = useMemo(() => uses, [uses]);
-
+> = ({ title, perPage, entity }: EntityDetailUsedInDocumentsTable) => {
+  const { entities, usedInDocuments: uses, id: entityId } = entity;
   const queryClient = useQueryClient();
 
   const removeAnchorMutation = useMutation({
     mutationFn: (data: { documentId: string; anchorIndex: number }) =>
-      api.documentRemoveAnchor(data.documentId, entity.id, data.anchorIndex),
+      api.documentRemoveAnchor(data.documentId, entityId, data.anchorIndex),
     onSuccess(data, variables, context) {
       queryClient.invalidateQueries({ queryKey: ["entity"] });
     },
@@ -64,8 +61,8 @@ export const EntityDetailUsedInDocumentsTable: React.FC<
                       toast.info("text copied to clipboard");
                     }}
                   />
-                  <StyledAbbreviatedLabel>
-                    {anchorText || ""}
+                  <StyledAbbreviatedLabel title={anchorText}>
+                    {anchorText}
                   </StyledAbbreviatedLabel>
                 </StyledAnchorText>
               ) : (
@@ -79,7 +76,13 @@ export const EntityDetailUsedInDocumentsTable: React.FC<
         Header: "Resource",
         Cell: ({ row }: CellType) => {
           const resourceEntity = entities[row.original.resourceId];
-          return <>{resourceEntity && <EntityTag entity={resourceEntity} />}</>;
+          return (
+            <>
+              {resourceEntity && (
+                <EntityTag entity={resourceEntity} fullWidth />
+              )}
+            </>
+          );
         },
       },
       {
@@ -98,14 +101,15 @@ export const EntityDetailUsedInDocumentsTable: React.FC<
               {territoryEntity && (
                 <EntityTag
                   entity={territoryEntity}
-                  unlinkButton={{
-                    onClick: () => {
-                      setTAnchor(territoryEntity.id);
-                      setOpenedDocument(row.original.document);
-                    },
-                    icon: <FaAnchor />,
-                    tooltipLabel: "open anchor",
-                  }}
+                  fullWidth
+                  // unlinkButton={{
+                  //   onClick: () => {
+                  //     setTAnchor(territoryentityId);
+                  //     setOpenedDocument(row.original.document);
+                  //   },
+                  //   icon: <FaAnchor />,
+                  //   tooltipLabel: "open anchor",
+                  // }}
                 />
               )}
             </>
@@ -140,7 +144,7 @@ export const EntityDetailUsedInDocumentsTable: React.FC<
       <Table
         entityTitle={title}
         columns={columns}
-        data={data}
+        data={uses}
         perPage={perPage}
         isLoading={removeAnchorMutation.isPending}
       />
