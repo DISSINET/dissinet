@@ -18,6 +18,7 @@ import {
   StyledModalInputWrap,
   StyledModalWrap,
 } from "./ModalStyles";
+import ReactDOM from "react-dom";
 
 interface Modal {
   children?: ReactNode;
@@ -52,22 +53,25 @@ export const Modal: FC<Modal> = ({
     <>
       {showModal && (
         <>
-          <StyledModalWrap>
-            {!disableBackground && (
-              <StyledBackground
-                style={animatedMount}
-                onClick={disableBgClick ? () => {} : onClose}
-              />
-            )}
-            <ModalCard
-              animatedMount={animatedMount}
-              width={width}
-              isLoading={isLoading}
-              fullHeight={fullHeight}
-            >
-              {children}
-            </ModalCard>
-          </StyledModalWrap>
+          {ReactDOM.createPortal(
+            <StyledModalWrap>
+              {!disableBackground && (
+                <StyledBackground
+                  style={animatedMount}
+                  onClick={disableBgClick ? () => {} : onClose}
+                />
+              )}
+              <ModalCard
+                animatedMount={animatedMount}
+                width={width}
+                isLoading={isLoading}
+                fullHeight={fullHeight}
+              >
+                {children}
+              </ModalCard>
+            </StyledModalWrap>,
+            document.body
+          )}
           <ModalKeyPress
             onEnter={onEnterPress}
             onEscape={disableEscapeClose ? () => {} : onClose}
@@ -170,7 +174,7 @@ export const ModalInputForm: React.FC<ModalInputForm> = ({
   alignLeft = false,
 }) => {
   return (
-    <StyledModalInputForm alignLeft={alignLeft}>
+    <StyledModalInputForm $alignLeft={alignLeft}>
       {children}
     </StyledModalInputForm>
   );
