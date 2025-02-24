@@ -107,6 +107,8 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   const values: IValue[] = [];
   const existingReferenceValueIds: string[] = [];
 
+  const acResourceIds: string[] = [];
+
   // retrieve all actions and push origin resource into list of references
   // +
   // replace original label with the id
@@ -115,6 +117,10 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   ).map((a) => {
     a.references.forEach((r) => {
       existingReferenceValueIds.push(r.value);
+
+      if (!acResourceIds.includes(r.resource) && r.resource) {
+        acResourceIds.push(r.resource);
+      }
     });
 
     const v = new Value({
@@ -139,11 +145,13 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   ).map((c) => {
     c.references.forEach((r) => {
       existingReferenceValueIds.push(r.value);
+      if (!acResourceIds.includes(r.resource) && r.resource) {
+        acResourceIds.push(r.resource);
+      }
     });
 
     // metaprops
-    c.props.forEach((p) => {
-      
+    c.props.forEach((p) => {});
 
     const v = new Value({
       id: uuidv4(),
@@ -161,24 +169,26 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   // retrieve all resources
   const resources = (
     await getEntitiesDataByClass<IResource>(db, EntityEnums.Class.Resource)
-  ).map((r) => {
-    r.references.forEach((r) => {
-      existingReferenceValueIds.push(r.value);
-    });
+  )
+    .filter((r) => acResourceIds.includes(r.id))
+    .map((r) => {
+      r.references.forEach((r) => {
+        existingReferenceValueIds.push(r.value);
+      });
 
-    const v = new Value({
-      id: uuidv4(),
-      labels: [r.id],
-    });
+      const v = new Value({
+        id: uuidv4(),
+        labels: [r.id],
+      });
 
-    values.push(v);
-    r.references.push({
-      id: uuidv4(),
-      resource: originResource.id,
-      value: v.id,
-    } as IReference);
-    return r;
-  });
+      values.push(v);
+      r.references.push({
+        id: uuidv4(),
+        resource: originResource.id,
+        value: v.id,
+      } as IReference);
+      return r;
+    });
 
   // get all Reference Values from existingReferenceValueIds and merge into values
   const existingReferenceValues = await rethink
