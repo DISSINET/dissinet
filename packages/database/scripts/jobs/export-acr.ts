@@ -199,10 +199,40 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
   values.push(...existingReferenceValues);
 
   // allow only relations, which have all entities in lists above
-  const allIds = actions
-    .map((a) => a.id)
-    .concat(concepts.map((c) => c.id))
-    .concat(resources.map((r) => r.id));
+  const allEntities: (IAction | IConcept | IResource | IValue)[] = [];
+  actions.forEach((a) => allEntities.push(a));
+  concepts.forEach((c) => allEntities.push(c));
+  resources.forEach((r) => allEntities.push(r));
+  values.forEach((v) => allEntities.push(v));
+
+  const allIds = allEntities.map((a) => a.id);
+
+  // filter metaprops, remove all where type or value are not being imported
+  concepts.forEach((c) => {
+    c.props = c.props.filter((p) => {
+      if (
+        !allIds.includes(p.type.entityId) ||
+        !allIds.includes(p.value.entityId)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  });
+
+  actions.forEach((a) => {
+    a.props = a.props.filter((p) => {
+      if (
+        !allIds.includes(p.type.entityId) ||
+        !allIds.includes(p.value.entityId)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  });
 
   const relations = (await getRelationsWithEntities(db, allIds)).filter((r) => {
     // check if all relation entityIds are in allIds
