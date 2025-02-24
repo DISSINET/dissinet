@@ -242,6 +242,8 @@ export const InstTemplate = async (
       if (templateEntity.class === EntityEnums.Class.Statement) {
         iEntity.labels[0] = "";
       } else {
+        console.log("inst template labeling");
+
         iEntity.labels[0] = `[INSTANCE OF] ${templateEntity.labels[0]}`;
       }
       iEntity.usedTemplate = templateEntity.id;
@@ -298,6 +300,10 @@ export const applyTemplate = async (
         } else {
           newEntity.labels[0] = `[INSTANCE OF] ${templateEntity.labels[0]}`;
         }
+      } else {
+        // label of entity is not empty
+        // second part of #2520
+        newEntity.labels[0] = entity.labels[0];
       }
       newEntity.usedTemplate = templateEntity.id;
       newEntity.props = await InstProps(templateEntity.props);
