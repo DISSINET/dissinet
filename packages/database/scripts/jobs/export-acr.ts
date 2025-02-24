@@ -187,8 +187,42 @@ const exportACR: IJob = async (db: Connection): Promise<void> => {
         resource: originResource.id,
         value: v.id,
       } as IReference);
+
       return r;
     });
+
+  const resourcesRelatedIds: string[] = [];
+  // take all related Resources
+  const resourcesRelations = await rethink
+    .table(Relation.table)
+    .getAll.call(undefined, ...resources.map((r) => r.id), {
+      index: DbEnums.Indexes.RelationsEntityIds,
+    })
+    .distinct()
+    .run(db);
+
+  resourcesRelations
+    .filter(
+      (rel: Relation) => rel.type === RelationEnums.Type.SuperordinateEntity
+    )
+    .forEach((rel: Relation) => {
+      rel.entityIds.forEach((entId) => {
+        if (
+          !resources.map((r) => r.id).includes(entId) &&
+          !resourcesRelatedIds.includes(entId)
+        ) {
+          resourcesRelatedIds.push(entId);
+        }
+      });
+    });
+
+  // get entities from resourcesRelatedIds and add them to resources list
+  const relatedResources = await rethink
+    .table(Resource.table)
+    .getAll(...resourcesRelatedIds)
+    .run(db);
+
+  resources.push(...relatedResources);
 
   // get all Reference Values from existingReferenceValueIds and merge into values
   const existingReferenceValues = await rethink
