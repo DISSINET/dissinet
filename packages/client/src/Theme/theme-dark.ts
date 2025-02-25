@@ -71,6 +71,7 @@ const darkTheme = {
 
     staging: "#911111",
     "data-import": "#ff6aaf",
+    "data-import-persecutio": "#ef7785",
     development: "#6174C2",
     sandbox: "#e59857",
 
