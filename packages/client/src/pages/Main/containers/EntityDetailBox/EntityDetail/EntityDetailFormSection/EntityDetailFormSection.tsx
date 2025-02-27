@@ -120,6 +120,11 @@ export const EntityDetailFormSection: React.FC<EntityDetailFormSection> = ({
   >(false);
   const alternativeLabels = entity.labels.slice(1);
 
+  let environmentName = (process.env.ROOT_URL || "").replace(
+    /apps\/inkvisitor[-]?/,
+    ""
+  );
+
   return (
     <>
       <StyledFormWrapper>
@@ -205,7 +210,7 @@ export const EntityDetailFormSection: React.FC<EntityDetailFormSection> = ({
             </StyledDetailContentRow>
           )}
 
-          {entity.legacyId && (
+          {entity.legacyId && process.env.SHOW_LEGACY_ID === "true" && (
             <StyledDetailContentRow>
               <StyledDetailContentRowLabel>
                 Legacy ID
@@ -213,6 +218,19 @@ export const EntityDetailFormSection: React.FC<EntityDetailFormSection> = ({
               <StyledDetailContentRowValue>
                 <StyledDetailContentRowValueID>
                   {entity.legacyId}
+                  <Button
+                    inverted
+                    tooltipLabel="copy ID"
+                    color="primary"
+                    label=""
+                    icon={<FaRegCopy />}
+                    onClick={async () => {
+                      if (entity.legacyId) {
+                        await navigator.clipboard.writeText(entity.legacyId);
+                        toast.info("ID copied to clipboard");
+                      }
+                    }}
+                  />
                 </StyledDetailContentRowValueID>
               </StyledDetailContentRowValue>
             </StyledDetailContentRow>
