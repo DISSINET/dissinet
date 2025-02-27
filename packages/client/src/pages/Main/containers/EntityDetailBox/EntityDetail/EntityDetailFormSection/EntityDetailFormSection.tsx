@@ -210,6 +210,7 @@ export const EntityDetailFormSection: React.FC<EntityDetailFormSection> = ({
             </StyledDetailContentRow>
           )}
 
+          {/* #2589 */}
           {entity.legacyId && process.env.SHOW_LEGACY_ID === "true" && (
             <StyledDetailContentRow>
               <StyledDetailContentRowLabel>
